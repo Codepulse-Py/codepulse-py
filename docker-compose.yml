@@ -1,0 +1,109 @@
+# CodePulse-Py local stack (§6.8). Every app service is a stub for now;
+# `docker compose up` should bring all six up healthy.
+name: codepulse
+
+x-python-stub: &python-stub
+  image: python:3.11-slim
+  working_dir: /srv
+  restart: unless-stopped
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-codepulse}:${POSTGRES_PASSWORD:-codepulse}@postgres:5432/${POSTGRES_DB:-codepulse}
+      REDIS_URL: redis://redis:6379/0
+      SANDBOX_URL: http://sandbox:8100
+      LLM_URL: http://vllm:8200/v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox:
+        condition: service_healthy
+      vllm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:1.27-alpine
+    ports:
+      - "5173:80"
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-codepulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codepulse}
+      POSTGRES_DB: ${POSTGRES_DB:-codepulse}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  sandbox:
+    <<: *python-stub
+    command: ["python", "sandbox/server.py"]
+    volumes:
+      - ./sandbox:/srv/sandbox:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # CPU stand-in for vLLM. Swap for vllm/vllm-openai on a GPU host (#18).
+  vllm:
+    <<: *python-stub
+    command: ["python", "models/serving/vllm_stub.py"]
+    environment:
+      MODEL_NAME: qwen2.5-coder-7b-stub
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./models/serving:/srv/models/serving:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8200/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
