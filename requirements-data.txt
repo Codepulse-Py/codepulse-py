@@ -1,0 +1,2 @@
+# Data pipeline dependencies (validation, replay, EDA).
+pandas==3.0.6
