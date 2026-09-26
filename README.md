@@ -26,6 +26,14 @@ ruff check . && ruff format --check .
 pytest
 ```
 
+## Data
+
+The Edwards 2019 and 2021 CS1 keystroke datasets live under the git-ignored `data/raw/`. See [docs/data.md](docs/data.md) for setup, schema and known issues, then check your copy with:
+
+```bash
+python scripts/validate_data.py
+```
+
 ## Running the stack
 
 ```bash
