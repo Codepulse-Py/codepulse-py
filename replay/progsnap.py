@@ -167,16 +167,14 @@ def replay_session(
         if on_state is not None:
             on_state(event, event.file, text)
 
+    # A file's state is settled after its last edit at a given timestamp, even
+    # if edits to other files share that timestamp in between.
+    last_edit = {(e.file, e.timestamp): i for i, e in enumerate(events) if e.kind == "edit"}
+
     for i, event in enumerate(events):
         if event.kind == "edit":
             state(event.file).apply(event.edit)
-            nxt = events[i + 1] if i + 1 < len(events) else None
-            if not (
-                nxt is not None
-                and nxt.kind == "edit"
-                and nxt.file == event.file
-                and nxt.timestamp == event.timestamp
-            ):
+            if last_edit[(event.file, event.timestamp)] == i:
                 settled(event)
         elif event.kind == "checkpoint":
             f = state(event.file)

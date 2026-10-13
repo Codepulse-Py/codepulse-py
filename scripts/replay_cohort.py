@@ -81,15 +81,15 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.perf_counter() - start
 
     table = pd.DataFrame(sessions)
-    n = len(table)
+    match_rate = float(table.matches_final.mean())
     edits = int(table.edits.sum())
     summary = {
         "cohort": args.cohort,
-        "sessions": n,
+        "sessions": len(table),
         "files": int(table.files.sum()),
         "edits": edits,
         "sessions_matching_final": int(table.matches_final.sum()),
-        "session_match_rate": round(float(table.matches_final.mean()), 4),
+        "session_match_rate": round(match_rate, 4),
         "files_final_agree": int(table.files_final_agree.sum()),
         "sessions_consistent": int(table.consistent.sum()),
         "delete_mismatch_rate": round(int(table.delete_mismatches.sum()) / max(edits, 1), 5),
@@ -116,9 +116,10 @@ def main(argv: list[str] | None = None) -> int:
         pd.DataFrame(snapshots, columns=cols).to_parquet(out / "snapshots.parquet", index=False)
 
     print(json.dumps(summary, indent=2))
-    ok = summary["session_match_rate"] >= args.min_match
+    # Compare the unrounded rate: 0.98996 must not pass a 0.99 threshold.
+    ok = match_rate >= args.min_match
     print(
-        f"{'PASS' if ok else 'FAIL'}  {summary['session_match_rate']:.2%} of sessions match "
+        f"{'PASS' if ok else 'FAIL'}  {match_rate:.2%} of sessions match "
         f"(threshold {args.min_match:.0%}) in {elapsed:.0f}s"
     )
     return 0 if ok else 1

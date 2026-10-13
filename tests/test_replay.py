@@ -150,3 +150,43 @@ def test_load_and_iterate_merges_files_by_timestamp(tmp_path):
     r = replay_session("S1", "A1", events)
     assert r.snapshots[0].kind == "run"
     assert r.snapshots[0].files == {"a.py": "a = 1\n", "b.py": "b = 2\n"}
+
+
+def test_interleaved_files_at_same_timestamp_settle_once_each():
+    events = [
+        edit(0, 100, "a.py", 0, "x = ("),
+        edit(1, 100, "b.py", 0, "y = 1"),
+        edit(2, 100, "a.py", 5, "1)"),
+    ]
+    seen = []
+    r = replay_session(
+        "S1", "A1", events, check_every_state=True, on_state=lambda e, f, t: seen.append((f, t))
+    )
+    assert seen == [("b.py", "y = 1"), ("a.py", "x = (1)")]
+    assert r.compile_checks == 2 and r.compile_agreements == 2
+
+
+def test_cli_threshold_uses_unrounded_rate(tmp_path, capsys):
+    import scripts.replay_cohort as cli
+
+    # 2 of 3 sessions match: 0.66666..., which rounds *up* to 0.6667.
+    rows = [
+        (i, f"S{i}", "A1", "a.py", "File.Edit", "Insert", "0.0", code, "", 1, "", "1")
+        for i, code in enumerate(["x = (", "x = 1", "y = 2"])
+    ]
+    cols = ["EventID", "SubjectID", "AssignmentID", "CodeStateSection", "EventType", "EditType",
+            "SourceLocation", "InsertText", "DeleteText", "ClientTimestamp", "X-Metadata",
+            "X-Compilable"]  # fmt: skip
+    (tmp_path / "2021").mkdir()
+    pd.DataFrame(rows, columns=cols).to_csv(tmp_path / "2021" / "keystrokes.csv", index=False)
+    args = [
+        "2021",
+        "--raw-dir",
+        str(tmp_path),
+        "--out-dir",
+        str(tmp_path / "out"),
+        "--no-snapshots",
+    ]
+    assert cli.main([*args, "--min-match", "0.66667"]) == 1
+    assert "FAIL" in capsys.readouterr().out
+    assert cli.main([*args, "--min-match", "0.66666"]) == 0
