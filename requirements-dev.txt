@@ -1,5 +1,6 @@
 -r requirements.txt
 -r requirements-data.txt
 httpx2==2.13.1
+hypothesis==6.169.0
 pytest==9.1.1
 ruff==0.16.8
