@@ -19,6 +19,23 @@ The outputs go to `data/interim/replay/<cohort>/`, which is git-ignored:
 For per-event states (the AST detectors, #8), call `replay_session(..., on_state=callback)`.
 The callback receives `(event, file, text)` once per distinct code state.
 
+## Viewing the rebuilt code
+
+`scripts/export_snapshot.py` writes one snapshot out as real `.py` files, so you can open them
+in an editor:
+
+```bash
+python scripts/export_snapshot.py 2021 Student1 Assign10 --list           # snapshots in the session
+python scripts/export_snapshot.py 2021 Student1 Assign10                  # end of session
+python scripts/export_snapshot.py 2021 Student1 Assign10 --event-id 143   # code at one run
+python scripts/export_snapshot.py 2019 S001 p5s --open                    # export and open in VS Code
+```
+
+It writes every file of the session, because programs import each other, to
+`data/interim/view/<cohort>/<subject>/<assignment>/<final | event_<id>>/`, which is git-ignored.
+`--open` needs VS Code's `code` command on the PATH. To install it, run **Shell Command: Install
+'code' command in PATH** from the VS Code command palette.
+
 ## Semantics
 
 - **Edits.** Each `File.Edit` deletes `DeleteText` and then inserts `InsertText` at
@@ -63,7 +80,7 @@ replay reproduces the true final file exactly, with no mismatches.
 | Edits applied | 970,154 | 5,037,529 |
 | **Sessions matching (final `X-Compilable`)** | **262 (100%)** | **1,581 (99.94%)** |
 | Files matching | 749 / 749 | 3,027 / 3,028 |
-| Every-state `X-Compilable` agreement | 99.89% of 962,862 | 99.96% of 4,982,851 |
+| Every-state `X-Compilable` agreement | 99.89% of 962,719 | 99.96% of 4,982,851 |
 | Deletes not matching `DeleteText` | 0.25% of edits | 21 edits (1 file) |
 | Sessions with zero delete mismatches | 173 (66%) | 1,581 |
 | Runs snapshotted | 27,326 | 75,112 |

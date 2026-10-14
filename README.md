@@ -40,6 +40,12 @@ Rebuild code states from the edit logs (see [docs/replay.md](docs/replay.md)):
 python scripts/replay_cohort.py 2021
 ```
 
+Open one student's rebuilt files in VS Code:
+
+```bash
+python scripts/export_snapshot.py 2021 Student1 Assign10 --open
+```
+
 ## Running the stack
 
 ```bash
