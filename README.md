@@ -34,6 +34,12 @@ The Edwards 2019 and 2021 CS1 keystroke datasets live under the git-ignored `dat
 python scripts/validate_data.py
 ```
 
+Rebuild code states from the edit logs (see [docs/replay.md](docs/replay.md)):
+
+```bash
+python scripts/replay_cohort.py 2021
+```
+
 ## Running the stack
 
 ```bash
