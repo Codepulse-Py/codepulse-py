@@ -67,6 +67,12 @@ Count candidate misconception episodes in both cohorts (RQ1, see [docs/rq1.md](d
 python scripts/mine_candidates.py
 ```
 
+Generate training-only synthetic windows for the rare misconceptions (see [docs/synthetic.md](docs/synthetic.md)):
+
+```bash
+python scripts/make_synthetic.py
+```
+
 ## Running the stack
 
 ```bash
