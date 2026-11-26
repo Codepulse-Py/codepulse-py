@@ -53,6 +53,14 @@ The 2021 students are split 70/10/20 into train, validation and test in the froz
 python scripts/make_splits.py
 ```
 
+Flag candidate misconception patterns in a code state (see [docs/detectors.md](docs/detectors.md)):
+
+```python
+from detectors import analyse
+
+analyse("def add(x, items=[]):\n    items.append(x)\n").findings
+```
+
 ## Running the stack
 
 ```bash
