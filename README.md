@@ -46,6 +46,13 @@ Open one student's rebuilt files in VS Code:
 python scripts/export_snapshot.py 2021 Student1 Assign10 --open
 ```
 
+The 2021 students are split 70/10/20 into train, validation and test in the frozen
+[data/splits.json](data/splits.json). Check that it still matches the raw data with:
+
+```bash
+python scripts/make_splits.py
+```
+
 ## Running the stack
 
 ```bash
