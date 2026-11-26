@@ -48,6 +48,8 @@ def _divisions(expr: ast.AST):
 
 
 def _sequence(node: ast.AST) -> bool:
+    if isinstance(node, ast.Tuple) and not node.elts:
+        return False  # `x * ()` is a half-typed call or grouping, not a repetition
     return isinstance(node, SEQUENCE_LITERALS) or (
         isinstance(node, ast.Constant) and isinstance(node.value, str)
     )

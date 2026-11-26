@@ -61,6 +61,12 @@ from detectors import analyse
 analyse("def add(x, items=[]):\n    items.append(x)\n").findings
 ```
 
+Count candidate misconception episodes in both cohorts (RQ1, see [docs/rq1.md](docs/rq1.md)):
+
+```bash
+python scripts/mine_candidates.py
+```
+
 ## Running the stack
 
 ```bash
