@@ -14,7 +14,7 @@ from detectors.base import Finding, finding, is_mutable_value, register, source_
 NAME = "mutable_default"
 
 
-@register(1, NAME, "Mutable default argument")
+@register(1, NAME, "Mutable default argument", phase="post-run")
 def detect(tree: ast.Module, source: str) -> list[Finding]:
     found = []
     for node in ast.walk(tree):

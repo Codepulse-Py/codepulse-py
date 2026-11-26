@@ -93,7 +93,7 @@ def _events(scope: ast.AST):
     return events
 
 
-@register(2, NAME, "Variable aliasing")
+@register(2, NAME, "Variable aliasing", phase="pre-run")
 def detect(tree: ast.Module, source: str) -> list[Finding]:
     found = []
     for scope in scopes(tree):
