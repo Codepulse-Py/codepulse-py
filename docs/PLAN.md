@@ -34,3 +34,41 @@
 | Final research paper submission | S18 |
 | Final thesis submission | S18 |
 | Final presentation | S18 |
+
+## Final proposal and panel comments (Nov 2026)
+
+The finalised proposal (signed 26 Nov 2026) replaces proposal v2. Section numbers in issues
+written before it refer to v2. The main mapping: v2 §6.2–6.4 is now §3.1.3 (Tables 3.1–3.3),
+v2 §6.6 is now §3.2.1, and v2 §7 is now §3.2.3–3.2.4.
+
+### Panel comments (proposal defence, 12 Nov 2026)
+
+| Comment | How the plan addresses it |
+|---|---|
+| Existing dataset to be checked against AI-generated data | Every synthetic batch is validated against real data before use (#75). The four checks are (a) a KS test and JS divergence per feature, (b) a real-vs-synthetic discriminator, where a batch with AUROC > 0.70 is rejected, (c) blind annotation of 10%, which must reach κ ≥ 0.80, and (d) a with-and-without ablation on real test folds only. Synthetic data is never used in validation or test, and is seeded from training folds only (#9). |
+| If real data is collected, statistical biases among the cohort to be addressed | Cohort-bias controls for any new cohort (#77, conditional): a background survey, balanced recruitment, a cohort comparison with covariate-shift tests, separate evaluation first, and per-cohort and per-experience-band reporting, where a gap > 0.10 macro-F1 is reported as a limitation. The ethics application is prepared early (#76). |
+| RQs clear | No change. |
+| Research type OK | No change: quantitative, comparative experimental design with ablation. |
+
+### Other changes from v2 that affect the work
+
+| Change | Issues |
+|---|---|
+| Student-grouped **five-fold cross-validation** replaces the fixed 70/10/20 split. Within each training portion, one fold's worth of students is held back for threshold tuning. Results are reported as mean ± sd across folds. | #74 (supersedes #4), #12, #13, #15, #16, #17 |
+| Occurrence gate across both cohorts: fewer than 50 **verified** real cases means the misconception is exploratory and excluded from the main claims. | #8 |
+| The NONE class is built from flagged slips plus random unflagged windows. A random unflagged sample estimates the detectors' missed cases. | #10 |
+| κ is reported before and after resolution, with a shared subset of at least 20%. | #11 |
+| Detection phases: earliness is measured for the pre-run misconceptions (aliasing, identity, indentation, int/float division). For the post-run ones (mutable default, global/local, `self`), p95 time-to-flag must be ≤ 11 s. | #27 |
+| Statistical testing: a bootstrap CI over students for fusion − B3, and McNemar's test against each baseline. | #28 |
+| Run events confirmed in both cohorts (#2), so RUNNING and execution features are used in training. | #5, #7 |
+| The single-university public data is stated as a limitation. | #29, #32 |
+
+### Specific-objective deadlines (final proposal §1.4)
+
+| Objective | Due | Status on 26 Nov 2026 |
+|---|---|---|
+| SO1 Schema audit, code-state replay, occurrence count | 31 Oct 2026 | Audit (#2) and replay (#3) done; detectors 1–4 in review (#6); detectors 5–7 (#40) and the count (#8) outstanding, so **overdue** |
+| SO2 Human-verified corpus, κ ≥ 0.80 | 15 Dec 2026 | Not started (#10, #11, #41) |
+| SO3 LoRA fusion model and ablation under five-fold CV | 31 Jan 2027 | Not started |
+| SO4 Web MVP, p95 latency < 1 s | 28 Feb 2027 | Scaffold only (#1) |
+| SO5 Replay, cross-cohort and expert evaluation | 31 Mar 2027 | Not started |
