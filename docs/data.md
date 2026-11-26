@@ -132,6 +132,10 @@ terms.
 
 ## Train / validation / test split
 
+> **Being replaced.** The final proposal (§3.2.4) uses student-grouped five-fold
+> cross-validation instead of this fixed split; see #74. The grade-tier stratification
+> below carries over.
+
 The 2021 cohort is split **by student** (§7.1), so no student's keystrokes appear in more than one
 split. The split is frozen in [`data/splits.json`](../data/splits.json); the 2019 cohort is not
 split, because all of it is held out for the cross-cohort test.
