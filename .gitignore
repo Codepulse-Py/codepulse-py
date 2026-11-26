@@ -221,3 +221,6 @@ __marimo__/
 data/raw/
 data/interim/
 *.parquet
+
+# macOS
+.DS_Store

@@ -130,6 +130,33 @@ terms.
 | `Assignment Descriptions/`, starters | both | Task PDFs and starter code |
 | `informed-consent.pdf` | both | Consent form shown to participants |
 
+## Train / validation / test split
+
+The 2021 cohort is split **by student** (§7.1), so no student's keystrokes appear in more than one
+split. The split is frozen in [`data/splits.json`](../data/splits.json); the 2019 cohort is not
+split, because all of it is held out for the cross-cohort test.
+
+| Split | Students | Share of 2021 events | Sessions |
+|---|---:|---:|---:|
+| train | 31 | 70.3% | 190 |
+| validation | 4 | 11.1% | 26 |
+| test | 9 | 18.5% | 46 |
+
+- **Stratified by grade tier.** Students are grouped into thirds (tertiles) of `FinalScore` from
+  `students.csv`: low 14.7–90.2, mid 90.8–95.7, high 95.7–100.6. The 3 students with no final
+  score form a fourth tier. Each tier is shuffled with a fixed seed (1400), and its students are
+  shared out in proportion, so every split covers the same range of ability.
+- **Check it.** `python scripts/make_splits.py` rebuilds the split from the raw data and fails if
+  it differs from the frozen file. Regenerate (`--write`) only on purpose: every model and result
+  depends on it.
+- **Use it.** Load it with `splits.manifest.load()`. Training code should call
+  `assert_no_leakage(train_subjects, eval_subjects)`.
+- **Leakage test in CI.** `tests/test_splits.py` checks on every push that no student is in two
+  splits, that all 44 are assigned exactly once, and that the sizes are 31 / 4 / 9.
+- **Known limitation.** The validation split has only 4 students. With 44 students in total that
+  is unavoidable at 10%, so treat validation numbers (such as the confidence threshold, #17) as
+  noisy.
+
 ## Known issues
 
 - **2019 subject count.** The JEDM paper reports 505 participants, but the released
