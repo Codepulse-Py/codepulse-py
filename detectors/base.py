@@ -1,4 +1,4 @@
-"""Shared types and registry for the AST misconception detectors (Algorithm 3, §6.4).
+"""Shared types and registry for the AST misconception detectors (Algorithm 3).
 
 A detector is a function ``(tree, source) -> list[Finding]`` registered under a
 stable name. Detectors only flag *candidate* structural patterns; whether a
@@ -25,11 +25,18 @@ class Finding:
 DetectorFn = Callable[[ast.Module, str], list[Finding]]
 
 
+# Detection phase (final proposal Table 3.3): a pre-run misconception has a
+# complete structural signature before the code runs, so earliness is measured
+# for it; a post-run one only shows once a run reveals it.
+PHASES = ("pre-run", "post-run")
+
+
 @dataclass(frozen=True, slots=True)
 class Detector:
-    number: int  # numbering of §6.4
+    number: int  # numbering of Table 3.3
     name: str
     title: str
+    phase: str
     fn: DetectorFn
     exploratory: bool = False
 
@@ -37,11 +44,16 @@ class Detector:
 REGISTRY: dict[str, Detector] = {}
 
 
-def register(number: int, name: str, title: str, exploratory: bool = False):
+def register(number: int, name: str, title: str, phase: str, exploratory: bool = False):
+    if phase not in PHASES:
+        raise ValueError(f"phase must be one of {PHASES}, not {phase!r}")
+
     def wrap(fn: DetectorFn) -> DetectorFn:
         if name in REGISTRY:
             raise ValueError(f"detector {name!r} registered twice")
-        REGISTRY[name] = Detector(number, name, title, fn, exploratory)
+        if any(d.number == number for d in REGISTRY.values()):
+            raise ValueError(f"detector number {number} registered twice")
+        REGISTRY[name] = Detector(number, name, title, phase, fn, exploratory)
         return fn
 
     return wrap

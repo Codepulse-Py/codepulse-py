@@ -55,7 +55,7 @@ def _blocks(node: ast.AST):
         yield handler.body
 
 
-@register(4, NAME, "Indentation scope", exploratory=True)
+@register(4, NAME, "Indentation scope", phase="pre-run", exploratory=True)
 def detect(tree: ast.Module, source: str) -> list[Finding]:
     found = []
     for node in ast.walk(tree):

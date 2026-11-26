@@ -291,15 +291,27 @@ def test_indentation_rules_are_labelled():
 # ---------------------------------------------------------------- registry and fallback
 
 
-def test_registry_holds_detectors_1_to_4():
-    numbers = {d.number: name for name, d in REGISTRY.items()}
-    assert numbers == {
-        1: "mutable_default",
-        2: "aliasing",
-        3: "identity_literal",
-        4: "indentation_scope",
+def test_registry_holds_all_seven_detectors_with_phases():
+    table = {d.number: (name, d.phase) for name, d in REGISTRY.items()}
+    assert table == {
+        1: ("mutable_default", "post-run"),
+        2: ("aliasing", "pre-run"),
+        3: ("identity_literal", "pre-run"),
+        4: ("indentation_scope", "pre-run"),
+        5: ("global_local", "post-run"),
+        6: ("self_confusion", "post-run"),
+        7: ("int_division", "pre-run"),
     }
-    assert REGISTRY["indentation_scope"].exploratory
+    assert [n for n, d in REGISTRY.items() if d.exploratory] == ["indentation_scope"]
+
+
+def test_register_rejects_bad_phase_and_duplicates():
+    from detectors.base import register
+
+    with pytest.raises(ValueError, match="phase"):
+        register(99, "x", "X", phase="during-run")
+    with pytest.raises(ValueError, match="registered twice"):
+        register(1, "another", "Another", phase="pre-run")(lambda tree, source: [])
 
 
 def test_analyse_runs_all_detectors_in_line_order():
@@ -338,3 +350,250 @@ def test_no_warnings_escape_for_broken_code_with_bad_escapes(recwarn):
     result = analyse('path = "C:\\ new"\nif x is 1\n')
     assert not result.parsed
     assert not [w for w in recwarn if issubclass(w.category, SyntaxWarning)]
+
+
+# ---------------------------------------------------------------- 5 global vs local
+
+GLOBAL_POSITIVE = [
+    # read before assignment: UnboundLocalError
+    """
+    count = 0
+    def increment():
+        count = count + 1
+    """,
+    # augmented assignment
+    """
+    score = 0
+    def add_point():
+        score += 1
+        return score
+    """,
+    # read in a condition before the assignment
+    """
+    total = 10
+    def spend(x):
+        if total > x:
+            total = total - x
+    """,
+    # assignment meant for the global: local never used, global read by the loop
+    """
+    done = False
+    def finish():
+        done = True
+    while not done:
+        finish()
+    """,
+    # global read in another function
+    """
+    lives = 3
+    def lose_life():
+        lives = 2
+    def show():
+        print(lives)
+    """,
+    # method of a class assigning a module-level name
+    """
+    counter = 0
+    class Pet:
+        def feed(self):
+            counter = counter + 1
+    """,
+]
+GLOBAL_NEGATIVE = [
+    # global declared
+    """
+    count = 0
+    def increment():
+        global count
+        count = count + 1
+    """,
+    # only read, never assigned
+    """
+    rate = 0.1
+    def interest(x):
+        return x * rate
+    """,
+    # parameter with the same name
+    """
+    size = 5
+    def draw(size):
+        size = size * 2
+        return size
+    """,
+    # loop variable named like a module variable
+    """
+    i = 0
+    def show(items):
+        for i in items:
+            print(i)
+    """,
+    # local name not defined at module level
+    """
+    def f():
+        total = 0
+        total = total + 1
+        return total
+    """,
+    # assigned but the module-level value is never read anywhere
+    """
+    done = False
+    def finish():
+        done = True
+    """,
+    # a local that reuses a script variable's name and is used locally: ordinary code
+    """
+    radius = 50
+    def draw():
+        radius = random.randint(10, 200)
+        turtle.circle(radius)
+    print(radius)
+    """,
+]
+
+
+@pytest.mark.parametrize("code", GLOBAL_POSITIVE)
+def test_global_local_positive(code):
+    check("global_local", code, 1)
+
+
+@pytest.mark.parametrize("code", GLOBAL_NEGATIVE)
+def test_global_local_negative(code):
+    check("global_local", code, 0)
+
+
+def test_global_local_rules():
+    assert hits("global_local", GLOBAL_POSITIVE[0])[0].rule == "unbound_local"
+    assert hits("global_local", GLOBAL_POSITIVE[1])[0].rule == "unbound_local"
+    (shadow,) = hits("global_local", GLOBAL_POSITIVE[3])
+    assert shadow.rule == "shadows_global" and "'done'" in shadow.message
+
+
+# ---------------------------------------------------------------- 6 self confusion
+
+SELF_POSITIVE = [
+    # no parameters at all
+    """
+    class Dog:
+        def bark():
+            print("Woof")
+    """,
+    # first parameter is not self, body uses self
+    """
+    class Card:
+        def setTitle(title):
+            self.title = title
+    """,
+    # first parameter is not self (instance lands in 'width')
+    """
+    class Box:
+        def area(width, height):
+            return width * height
+    """,
+    # method called on the class with the instance left out
+    """
+    class Dog:
+        def bark(self):
+            print("Woof")
+    Dog.bark()
+    """,
+    # called on the class with the other arguments but no instance
+    """
+    class Face:
+        def setSmile(self, smile):
+            self.smile = smile
+    Face.setSmile(True)
+    """,
+]
+SELF_NEGATIVE = [
+    """
+    class Dog:
+        def bark(self):
+            print("Woof")
+    d = Dog()
+    d.bark()
+    """,
+    """
+    class Shape:
+        @staticmethod
+        def sides():
+            return 0
+
+        @classmethod
+        def make(cls):
+            return cls()
+    Shape.sides()
+    """,
+    # explicit instance passed to the class-level call
+    """
+    class Base:
+        def __init__(self, name):
+            self.name = name
+    class Child(Base):
+        def __init__(self, name):
+            Base.__init__(self, name)
+    """,
+    # module function without self is fine
+    """
+    def bark():
+        print("Woof")
+    bark()
+    """,
+    # call on something that is not a class in this file
+    """
+    import random
+    x = random.randint(1, 5)
+    """,
+]
+
+
+@pytest.mark.parametrize("code", SELF_POSITIVE)
+def test_self_confusion_positive(code):
+    check("self_confusion", code, 1)
+
+
+@pytest.mark.parametrize("code", SELF_NEGATIVE)
+def test_self_confusion_negative(code):
+    check("self_confusion", code, 0)
+
+
+def test_self_confusion_rules():
+    assert hits("self_confusion", SELF_POSITIVE[0])[0].rule == "missing_self"
+    (call,) = hits("self_confusion", SELF_POSITIVE[3])
+    assert call.rule == "called_on_class" and "Dog.bark()" in call.message
+
+
+# ---------------------------------------------------------------- 7 int vs float division
+
+DIVISION_POSITIVE = [
+    "middle = items[len(items) / 2]\n",
+    "for i in range(n / 2):\n    pass\n",
+    'print("*" * (width / 2))\n',
+    "half = word[: len(word) / 2]\n",
+    "roll = random.randint(1, sides / 2)\n",
+    "row = [0] * (size / 2)\n",
+    "x = grid[r][c / 2 + 1]\n",
+]
+DIVISION_NEGATIVE = [
+    "middle = items[len(items) // 2]\n",
+    "for i in range(int(n / 2)):\n    pass\n",
+    "average = total / count\n",
+    "x = items[round(n / 2)]\n",
+    "step = values[0] / 2.0\n",
+    "for i in range(10):\n    turtle.forward(size / 2)\n",
+    "y = items[i] / 2\n",
+]
+
+
+@pytest.mark.parametrize("code", DIVISION_POSITIVE)
+def test_int_division_positive(code):
+    check("int_division", code, 1)
+
+
+@pytest.mark.parametrize("code", DIVISION_NEGATIVE)
+def test_int_division_negative(code):
+    check("int_division", code, 0)
+
+
+def test_int_division_message_names_the_context():
+    (f,) = hits("int_division", DIVISION_POSITIVE[1])
+    assert "'n / 2'" in f.message and "range()" in f.message and "'//'" in f.message

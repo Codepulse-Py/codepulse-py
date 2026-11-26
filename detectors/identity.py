@@ -24,7 +24,7 @@ def _literal(node: ast.AST) -> bool:
     )
 
 
-@register(3, NAME, "Identity vs equality")
+@register(3, NAME, "Identity vs equality", phase="pre-run")
 def detect(tree: ast.Module, source: str) -> list[Finding]:
     found = []
     for node in ast.walk(tree):
