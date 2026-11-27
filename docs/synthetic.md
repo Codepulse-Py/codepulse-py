@@ -1,5 +1,12 @@
 # Synthetic windows for rare misconceptions (#9)
 
+> **Rejected by validation (#75).** Every batch fails the real-vs-synthetic discriminator check
+> (AUROC ≥ 0.99, against a limit of 0.70, even on behaviour alone), after three generator
+> revisions (v2–v4). Under §3.2.1 this data is **not used for training**, and the four classes
+> are exploratory. See [`docs/synthetic_validation.md`](synthetic_validation.md). The generator
+> stays in the repository so the result can be reproduced, and in case a revised approach is
+> agreed.
+
 The occurrence count (`docs/rq1.md`) left four misconceptions far below the 50-case gate:
 mutable default (4 real candidates), aliasing (0), identity vs equality (5) and `self` confusion
 (29). This dataset gives the model **training** examples for them.
@@ -76,7 +83,17 @@ training data only, 100–200 per rare class, training-only use, and #75 validat
   generation), and every item records its `method`, so #75 can test the methods separately and
   drop `accumulator_param` if it fails.
 
-## Result (seed 1400, 150 requested per class)
+## Result (seed 1400, 150 requested per class, generator v1)
+
+The current generator is v4 (`GENERATOR_VERSION`):
+
+- **v2** adds run outcomes;
+- **v3** samples seeds from any moment of a session, auto-closes brackets and adds typos;
+- **v4** tunes the typo rate and the cues.
+
+v4 keeps 149 / 149 / 149 / 148 items (mutable default, aliasing, identity, `self`). Mutable
+default is 8 grounded `moved_local` plus 141 `accumulator_param`. The table below is the original
+v1 run.
 
 | Misconception | Kept | Seed students | Assignments | Distinct seed files | Max items per student | Median rows per item |
 |---|---:|---:|---:|---:|---:|---:|

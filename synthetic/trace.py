@@ -24,6 +24,24 @@ COLUMNS = [
     "CodeStateID", "X-Compilable",
 ]  # fmt: skip
 TOOL = "synthetic"
+# PyCharm (the 2021 editor) inserts the closing bracket or quote as you type the opener,
+# then types over it; text stays parseable while a call is being written.
+PAIRS = {"(": ")", "[": "]", "{": "}", '"': '"', "'": "'"}
+CLOSERS = {")", "]", "}"}
+
+
+def _balanced(text: str) -> bool:
+    stack: list[str] = []
+    for ch in text:
+        if stack and ch == stack[-1]:
+            stack.pop()
+        elif ch in PAIRS:
+            stack.append(PAIRS[ch])
+        elif ch in CLOSERS:
+            return False
+    return not stack
+
+
 KEYSTROKE_LAG_MS = 8  # X-Keystroke row follows its File.Edit by a few ms in the 2021 logs
 SELECTION_DELETE = 4  # deletions longer than this are one selection delete, not backspaces
 
@@ -34,6 +52,7 @@ class Timing:
 
     keystroke_gaps: list[int]
     long_pauses: list[int]
+    typo_rate: float = 0.0  # chance per letter of a wrong key fixed with backspace
 
     def gap(self, rng: random.Random) -> int:
         return rng.choice(self.keystroke_gaps) if self.keystroke_gaps else rng.randint(80, 400)
@@ -89,13 +108,43 @@ class Trace:
         """A long pause (DEEP_THINKING, > 10 s)."""
         self.wait(self.timing.pause(self.rng))
 
+    def _key(self, position: int, ch: str) -> None:
+        self.t += KEYSTROKE_LAG_MS
+        meta = {"\n": "Enter", "\t": "Tab"}.get(ch, ch)
+        self._row("X-Keystroke", SourceLocation=f"{position + 1}.0", **{"X-Metadata": meta})
+
     def type(self, offset: int, text: str) -> None:
-        for i, ch in enumerate(text):
+        """Type ``text`` at ``offset`` key by key, as the 2021 editor logs it.
+
+        Brackets and quotes are auto-closed and then typed over (only when
+        ``text`` is balanced, so the result is exactly ``text``), and letters
+        are occasionally mistyped and fixed with backspace, at the student's own
+        typo rate.
+        """
+        autopair = _balanced(text)
+        expected: list[str] = []
+        pos = offset
+        for ch in text:
             self.wait(self.timing.gap(self.rng))
-            self._edit(offset + i, ch, "", "Insert")
-            self.t += KEYSTROKE_LAG_MS
-            meta = {"\n": "Enter", "\t": "Tab"}.get(ch, ch)
-            self._row("X-Keystroke", SourceLocation=f"{offset + i + 1}.0", **{"X-Metadata": meta})
+            if autopair and expected and ch == expected[-1]:
+                expected.pop()  # type over the auto-inserted closer: no file edit
+                self._key(pos, ch)
+                pos += 1
+                continue
+            if ch.isalpha() and self.rng.random() < self.timing.typo_rate:
+                wrong = self.rng.choice("asdfghjklqwertyuiopzxcvbnm".replace(ch.lower(), ""))
+                self._edit(pos, wrong, "", "Insert")
+                self._key(pos, wrong)
+                self.wait(self.timing.gap(self.rng))
+                self._edit(pos, "", wrong, "Delete")
+                self._row("X-Action", **{"X-Metadata": "Backspace"})
+                self.wait(self.timing.gap(self.rng))
+            self._edit(pos, ch, "", "Insert")
+            if autopair and ch in PAIRS:
+                self._edit(pos + 1, PAIRS[ch], "", "Insert")  # same instant
+                expected.append(PAIRS[ch])
+            self._key(pos, ch)
+            pos += 1
 
     def erase(self, offset: int, text: str) -> None:
         if len(text) > SELECTION_DELETE:

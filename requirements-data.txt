@@ -1,3 +1,7 @@
 # Data pipeline dependencies (validation, replay, EDA).
 pandas==3.0.6
 pyarrow==26.0.0
+scikit-learn==1.9.1
+# scipy 1.18 needs Python >= 3.12; the project targets 3.11 (CI), local dev may be newer.
+scipy==1.17.1; python_version < "3.12"
+scipy==1.18.1; python_version >= "3.12"

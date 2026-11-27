@@ -12,14 +12,6 @@ from synthetic.inject import GROUNDED, Positions, apply, inject
 from synthetic.trace import COLUMNS, Timing, Trace
 
 RAW = Path(__file__).resolve().parent.parent / "data" / "raw" / "2021" / "keystrokes.csv"
-SNAPSHOTS = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "interim"
-    / "replay"
-    / "2021"
-    / "snapshots.parquet"
-)
 
 
 def run_inject(misconception, code, seed=0, methods=None):
@@ -174,6 +166,43 @@ def test_trace_rows_replay_exactly(tmp_path):
     assert rows.ClientTimestamp.astype(int).is_monotonic_increasing
 
 
+def replay_rows(tmp_path, trace):
+    rows = pd.DataFrame(trace.rows, columns=COLUMNS)
+    rows["EventID"] = range(len(rows))
+    rows.to_csv(tmp_path / "k.csv", index=False)
+    ((_, _, events),) = list(iter_sessions(load_main_table(tmp_path / "k.csv")))
+    return rows, replay_session(trace.subject, trace.assignment, events)
+
+
+def test_brackets_are_auto_closed_and_typed_over(tmp_path):
+    t = Trace("SYN-0002", "A1", "a.py", "", 0, Timing([100], [15_000]), random.Random(0))
+    t._row("File.Edit", SourceLocation="0.0", EditType="X-Checkpoint", InsertText="")
+    t.type(0, 'print(len("ab"))\n')
+    rows, result = replay_rows(tmp_path, t)
+    assert result.consistent and result.files["a.py"].text == 'print(len("ab"))\n'
+    edits = rows[rows.EventType == "File.Edit"]
+    # the closers are inserted with their openers, so no edit ever leaves "(" unclosed
+    assert (edits["X-Compilable"].iloc[-1]) == "1"
+    assert set(edits.InsertText) >= {"(", ")", '"'}
+
+
+def test_unbalanced_text_is_typed_literally():
+    t = Trace("SYN-0003", "A1", "a.py", "", 0, Timing([100], [15_000]), random.Random(0))
+    t.type(0, "f(")
+    assert t.text == "f("
+
+
+def test_typos_are_fixed_with_backspace(tmp_path):
+    t = Trace(
+        "SYN-0004", "A1", "a.py", "", 0, Timing([100], [15_000], typo_rate=1.0), random.Random(0)
+    )
+    t._row("File.Edit", SourceLocation="0.0", EditType="X-Checkpoint", InsertText="")
+    t.type(0, "ab")
+    rows, result = replay_rows(tmp_path, t)
+    assert result.consistent and t.text == "ab"
+    assert (rows.EditType == "Delete").sum() == 2  # one wrong key per letter, each deleted
+
+
 def test_usable_for_training_drops_test_fold_seeds():
     manifest = pd.DataFrame({"synthetic_id": ["a", "b", "c"], "seed_subject": ["S1", "S2", "S1"]})
     assert usable_for_training(manifest, ["S1"]).synthetic_id.tolist() == ["b"]
@@ -182,11 +211,11 @@ def test_usable_for_training_drops_test_fold_seeds():
 # ---------------------------------------------------------------- end to end (needs data)
 
 
-@pytest.mark.skipif(not (RAW.exists() and SNAPSHOTS.exists()), reason="raw data not available")
+@pytest.mark.skipif(not RAW.exists(), reason="raw data not available")
 def test_generate_end_to_end(tmp_path):
     from synthetic.generate import generate
 
-    summary = generate(RAW.parents[1], SNAPSHOTS, tmp_path, per_class=2, seed=3)
+    summary = generate(RAW.parents[1], tmp_path, per_class=2, seed=3)
     manifest = pd.read_csv(tmp_path / "manifest.csv")
     assert sum(summary["kept"].values()) == len(manifest) >= 6
     assert manifest.synthetic.all() and manifest.seed_subject.str.startswith("Student").all()

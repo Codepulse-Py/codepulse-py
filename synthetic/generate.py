@@ -28,7 +28,7 @@ from __future__ import annotations
 import ast
 import random
 import re
-from collections import Counter
+from collections import Counter, namedtuple
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -37,7 +37,7 @@ import pandas as pd
 from detectors import analyse
 from features.run_outcomes import load_run_outcomes
 from mining.episodes import mine_session
-from replay.progsnap import iter_sessions, load_main_table, replay_session
+from replay.progsnap import iter_sessions, load_main_table, parses, replay_session
 from synthetic.inject import GROUNDED, MISCONCEPTIONS, Injection, inject
 from synthetic.trace import COLUMNS, Timing, Trace
 
@@ -55,13 +55,17 @@ ERROR_TEXT = {
     "SyntaxError": "invalid syntax",
 }
 WINDOW_MS = 30_000
-GENERATOR_VERSION = "inject-v2"  # v2: run outcomes (exception types) in runs.csv
+# v2: run outcomes in runs.csv. v3 (after the #75 discriminator check): seeds from any
+# moment of a session, auto-closed brackets, typos at the student's rate, one run by default.
+# v4: typo rate scaled to real typo-like fixes, a pause before cue runs, 1-2 cues.
+GENERATOR_VERSION = "inject-v4"
 CUES = {
-    "mutable_default": ["run_repeat", "long_pause", "print_inside"],
-    "aliasing": ["pause_after", "print_both", "run_repeat"],
-    "identity_literal": ["trial_switch", "run_repeat", "long_pause"],
-    "self_confusion": ["toggle_self", "run_repeat", "long_pause"],
+    "mutable_default": ["run", "run_repeat", "long_pause", "print_inside"],
+    "aliasing": ["pause_after", "print_both", "run"],
+    "identity_literal": ["trial_switch", "run", "long_pause"],
+    "self_confusion": ["toggle_self", "run", "long_pause"],
 }
+SEEDS_PER_SESSION = 40
 
 
 @dataclass
@@ -110,9 +114,14 @@ class RealData:
         out = {}
         for subject, g in edits.groupby("SubjectID"):
             gaps = g.groupby(["AssignmentID", "CodeStateSection"])["_ts"].diff().dropna()
+            single_ins = ((g.EditType == "Insert") & (g.InsertText.str.len() == 1)).sum()
+            single_del = ((g.EditType == "Delete") & (g.DeleteText.str.len() == 1)).sum()
             out[subject] = Timing(
                 keystroke_gaps=[int(x) for x in gaps[(gaps >= 30) & (gaps <= 2000)]],
                 long_pauses=[int(x) for x in gaps[(gaps >= 10_000) & (gaps <= 60_000)]],
+                # Not every single-character delete fixes a typo; v3's raw ratio made
+                # twice the real reversal cycles, so a third of it is used.
+                typo_rate=min(0.08, single_del / max(1, single_ins) / 3),
             )
         return out
 
@@ -122,7 +131,7 @@ class RealData:
         return files[file].text if file in files else ""
 
     def lead_in(self, subject, assignment, file, lo: int, run_ms: int) -> pd.DataFrame:
-        """The file's real rows from ``lo`` up to the run, plus that run's exit-code row."""
+        """The file's real rows from ``lo`` up to the seed, plus an exit-code row just after."""
         g = self.raw.get((subject, assignment, file))
         if g is None:
             return pd.DataFrame(columns=COLUMNS)
@@ -138,6 +147,9 @@ def _cue(trace: Trace, cue: str, inj: Injection) -> None:
     rng = trace.rng
     if cue in ("pause_after", "long_pause"):
         trace.think()
+    elif cue == "run":
+        trace.wait(rng.randint(5_000, 25_000))  # students rarely run the instant they finish
+        trace.run()
     elif cue == "run_repeat":
         trace.run()
         trace.wait(rng.randint(2000, 6000))
@@ -193,12 +205,26 @@ def _line_offset(text: str, line: int) -> int:
 # ---------------------------------------------------------------- generation
 
 
-def _seeds(snapshots: pd.DataFrame, rng: random.Random) -> list:
-    """Every file of every run and end-of-session snapshot, deduplicated by code."""
-    snaps = snapshots[snapshots.kind.isin(["run", "final"]) & (snapshots.code != "")]
-    snaps = snaps.drop_duplicates(["subject", "assignment", "file", "code"])
-    cols = ["subject", "assignment", "file", "event_id", "timestamp", "code"]
-    seeds = list(snaps[cols].itertuples(index=False))
+Seed = namedtuple("Seed", "subject assignment file event_id timestamp code")
+
+
+def _seeds(real: RealData, rng: random.Random) -> list[Seed]:
+    """Parseable code states sampled across the whole of every 2021 session.
+
+    Sampling uniformly over edit states, rather than only at runs, matches when
+    real candidates appear: mid-development, in smaller code, not right after a
+    run (the #75 discriminator separated v1/v2 data on exactly these features).
+    """
+    seeds = []
+    for (subject, assignment), events in real.sessions.items():
+        n_edits = sum(e.kind == "edit" for e in events) or 1
+        p = min(1.0, SEEDS_PER_SESSION / n_edits)
+
+        def take(event, file, text, subject=subject, assignment=assignment, p=p):
+            if event.kind == "edit" and text.strip() and rng.random() < p and parses(text):
+                seeds.append(Seed(subject, assignment, file, event.event_id, event.timestamp, text))
+
+        replay_session(subject, assignment, events, on_state=take)
     rng.shuffle(seeds)
     return seeds
 
@@ -243,7 +269,7 @@ def build_item(real: RealData, seed, misconception: str, number: int, rng, metho
         trace.replace(offset, delete, insert)
     injected_at = trace.t
     menu = CUES[misconception]
-    cues = rng.sample(menu, rng.randint(1, len(menu)))
+    cues = rng.sample(menu, rng.randint(1, 2))
     if "pause_after" in cues:
         cues.remove("pause_after")
         cues.insert(0, "pause_after")
@@ -278,11 +304,11 @@ def quality_check(items: list[Item], rows_csv: Path) -> dict[str, str]:
     return failures
 
 
-def generate(raw_dir: Path, snapshots_path: Path, out_dir: Path, per_class: int, seed: int,
+def generate(raw_dir: Path, out_dir: Path, per_class: int, seed: int,
              misconceptions=MISCONCEPTIONS, cap_share: float = 0.1) -> dict:  # fmt: skip
     rng = random.Random(seed)
     real = RealData(raw_dir)
-    seeds = _seeds(pd.read_parquet(snapshots_path), rng)
+    seeds = _seeds(real, rng)
     items: list[Item] = []
     for misconception in misconceptions:
         per_student, per_file, made = Counter(), Counter(), 0

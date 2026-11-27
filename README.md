@@ -80,6 +80,12 @@ Extract 30 s / 10 s window features with behavioural states (see [docs/features.
 python scripts/extract_features.py
 ```
 
+Validate synthetic windows against real data (the panel's check; see [docs/synthetic_validation.md](docs/synthetic_validation.md)):
+
+```bash
+python scripts/validate_synthetic.py run
+```
+
 ## Running the stack
 
 ```bash
