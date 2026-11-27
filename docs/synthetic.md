@@ -105,6 +105,7 @@ The outputs go to `data/interim/synthetic/` (git-ignored):
 |---|---|
 | `keystrokes.csv` | One session per item, in 2021 ProgSnap2 columns. `SubjectID` is `SYN-NNNN`. Generated rows have `ToolInstances = synthetic`; the copied lead-in rows keep the original value. |
 | `manifest.csv` | One row per item: `synthetic=True`, misconception, rule, method, a note on the edit, seed student, assignment, file and event, `seed_ms`, `injected_at_ms`, cues, generator version and seed. |
+| `runs.csv` | Run records in the 2021 `runs.csv` format, with the exception each run would raise (generator v2: a `TypeError` for `self` confusion, a `SyntaxError` for unparseable code). |
 | `summary.json` | Counts requested, generated, kept by method and rejected. |
 
 **Training-fold rule.** When training fold *k*, drop every item whose seed student is one of

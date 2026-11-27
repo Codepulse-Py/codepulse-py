@@ -74,6 +74,12 @@ Generate training-only synthetic windows for the rare misconceptions (see [docs/
 python scripts/make_synthetic.py
 ```
 
+Extract 30 s / 10 s window features with behavioural states (see [docs/features.md](docs/features.md) and [docs/states.md](docs/states.md)):
+
+```bash
+python scripts/extract_features.py
+```
+
 ## Running the stack
 
 ```bash
