@@ -7,7 +7,7 @@
 | S01 · Literature Review & Pivot | 2026-08-23 → 2026-09-05 | Literature review, SOTA matrix, Java→Python pivot, Edwards 2019/2021 acquired. |
 | S02 · Proposal Writing | 2026-09-06 → 2026-09-19 | Research proposal v2 written against the 8-part defence blueprint. |
 | S03 · Proposal Defence & Foundations | 2026-09-20 → 2026-10-03 | Defend the proposal; repo scaffold; datasets validated. |
-| S04 · Proposal Submission & Data Replay | 2026-10-04 → 2026-10-17 | Submit revised proposal document; ProgSnap2 replay engine; frozen splits. |
+| S04 · Proposal Submission & Data Replay | 2026-10-04 → 2026-10-17 | Submit revised proposal document; ProgSnap2 replay engine; frozen splits (now five-fold CV, #74). |
 | S05 · EDA & Behaviour States | 2026-10-18 → 2026-10-31 | Exploratory analysis of both cohorts; Algorithm 1 behaviour states. |
 | S06 · AST Detectors I | 2026-11-01 → 2026-11-14 | AST detectors 1–4 fully tested. |
 | S07 · AST Detectors II & Features | 2026-11-15 → 2026-11-28 | AST detectors 5–7; Algorithm 2 ~40-feature extractor. |

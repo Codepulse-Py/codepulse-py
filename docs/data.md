@@ -130,36 +130,72 @@ terms.
 | `Assignment Descriptions/`, starters | both | Task PDFs and starter code |
 | `informed-consent.pdf` | both | Consent form shown to participants |
 
-## Train / validation / test split
+## Cross-validation folds
 
-> **Being replaced.** The final proposal (§3.2.4) uses student-grouped five-fold
-> cross-validation instead of this fixed split; see #74. The grade-tier stratification
-> below carries over.
+The 2021 cohort is evaluated with **student-grouped five-fold cross-validation** (final proposal
+§3.2.4). With 44 students, a single fixed split would leave too few test students for stable
+per-class results, so every student is tested exactly once. The folds are frozen in
+[`data/folds.json`](../data/folds.json). The 2019 cohort is not split, because all of it is held
+out for the cross-cohort test (Stage C).
 
-The 2021 cohort is split **by student** (§7.1), so no student's keystrokes appear in more than one
-split. The split is frozen in [`data/splits.json`](../data/splits.json); the 2019 cohort is not
-split, because all of it is held out for the cross-cohort test.
+| Fold | 0 | 1 | 2 | 3 | 4 |
+|---|---:|---:|---:|---:|---:|
+| Students | 9 | 9 | 9 | 9 | 8 |
+| Sessions | 46 | 59 | 54 | 55 | 48 |
+| Share of 2021 events | 19.7% | 23.0% | 19.5% | 18.4% | 19.4% |
 
-| Split | Students | Share of 2021 events | Sessions |
-|---|---:|---:|---:|
-| train | 31 | 70.3% | 190 |
-| validation | 4 | 11.1% | 26 |
-| test | 9 | 18.5% | 46 |
+**Rounds.** In round *k*, fold *k* is the test set and fold *k + 1* (mod 5) is held back for
+threshold tuning (#17). The other three folds (26–27 students) are the training set. Every
+student is tested once and used for tuning once. Results are reported as mean ± sd over the five
+rounds.
 
-- **Stratified by grade tier.** Students are grouped into thirds (tertiles) of `FinalScore` from
-  `students.csv`: low 14.7–90.2, mid 90.8–95.7, high 95.7–100.6. The 3 students with no final
-  score form a fourth tier. Each tier is shuffled with a fixed seed (1400), and its students are
-  shared out in proportion, so every split covers the same range of ability.
-- **Check it.** `python scripts/make_splits.py` rebuilds the split from the raw data and fails if
-  it differs from the frozen file. Regenerate (`--write`) only on purpose: every model and result
-  depends on it.
-- **Use it.** Load it with `splits.manifest.load()`. Training code should call
-  `assert_no_leakage(train_subjects, eval_subjects)`.
-- **Leakage test in CI.** `tests/test_splits.py` checks on every push that no student is in two
-  splits, that all 44 are assigned exactly once, and that the sizes are 31 / 4 / 9.
-- **Known limitation.** The validation split has only 4 students. With 44 students in total that
-  is unavoidable at 10%, so treat validation numbers (such as the confidence threshold, #17) as
-  noisy.
+**Stratification.** Folds are balanced on two things:
+
+1. **Grade tier:** thirds (tertiles) of `FinalScore` from `students.csv`, namely low 14.7–90.2,
+   mid 90.8–95.7 and high 95.7–100.6. The 3 students with no final score form a fourth tier.
+2. **Candidate misconception episodes per student** (#8). Many episodes come from a few students.
+   Balancing on grade tier alone left one fold with a single global-vs-local student and 2
+   int-division episodes, which could become zero after verification and make per-class F1
+   undefined in that fold.
+
+   Students are placed one at a time, those holding the largest share of the rarest classes
+   first, each into the fold that keeps every class's counts and every tier's counts most even
+   (iterative stratification). This uses candidate counts only, not verified labels or model
+   output, and it was fixed before any modelling.
+
+Persistent 2021 candidate episodes per test fold (students in brackets):
+
+| Misconception | 0 | 1 | 2 | 3 | 4 |
+|---|---:|---:|---:|---:|---:|
+| Indentation scope | 38 (6) | 20 (7) | 33 (7) | 28 (7) | 28 (8) |
+| Int vs float division | 7 (5) | 9 (5) | 8 (4) | 9 (4) | 10 (5) |
+| Global vs local | 10 (2) | 12 (4) | 7 (5) | 9 (3) | 7 (3) |
+| `self` confusion | 5 (2) | 5 (2) | 7 (2) | 6 (3) | 6 (4) |
+| Identity vs equality | 1 (1) | 2 (1) | 1 (1) | 0 | 0 |
+
+Identity has only 3 students in 2021, so it can't appear in every fold. It is exploratory anyway
+(`docs/rq1.md`).
+
+- **Check it.** `python scripts/make_folds.py` rebuilds the folds from `students.csv` and the RQ1
+  episodes, and fails if they differ from the frozen file. Regenerate (`--write`) only on
+  purpose: every model and result depends on the folds.
+- **Use it.**
+  ```python
+  from splits.manifest import all_splits
+
+  for r in all_splits():  # r.train, r.tune, r.test
+      ...
+  ```
+  Training code should call `assert_no_leakage(train_subjects, eval_subjects)`. Synthetic data
+  is filtered per round with `usable_for_training(manifest, r.test)`, which keeps between 428
+  and 501 of the 599 items depending on the round.
+- **Leakage tests in CI.** `tests/test_splits.py` checks on every push that:
+  - the five folds are disjoint and cover all 44 students;
+  - in every round, train, tune and test share no student;
+  - every student is tested once and tuned once;
+  - every test fold has candidates of each main-claim class.
+- **Known limitation.** The per-round tuning set is one fold (8–9 students), so the tuned
+  threshold (#17) is still estimated from few students. Report its spread across rounds.
 
 ## Known issues
 

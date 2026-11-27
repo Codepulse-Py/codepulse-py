@@ -46,11 +46,12 @@ Open one student's rebuilt files in VS Code:
 python scripts/export_snapshot.py 2021 Student1 Assign10 --open
 ```
 
-The 2021 students are split 70/10/20 into train, validation and test in the frozen
-[data/splits.json](data/splits.json). Check that it still matches the raw data with:
+The 2021 students are divided into five frozen cross-validation folds in
+[data/folds.json](data/folds.json) (see [docs/data.md](docs/data.md)). Check that they still
+match the raw data with:
 
 ```bash
-python scripts/make_splits.py
+python scripts/make_folds.py
 ```
 
 Flag candidate misconception patterns in a code state (see [docs/detectors.md](docs/detectors.md)):
