@@ -3,8 +3,8 @@
     python scripts/make_synthetic.py                     # 150 per rare class
     python scripts/make_synthetic.py --per-class 100 --seed 7
 
-Needs the 2021 replay snapshots (python scripts/replay_cohort.py 2021). Writes
-to data/interim/synthetic/ (git-ignored):
+Seeds are sampled from the 2021 cohort's own replayed sessions. Writes to
+data/interim/synthetic/ (git-ignored):
 
     keystrokes.csv   2021-format ProgSnap2 rows, one session per synthetic item
     manifest.csv     one row per item: misconception, rule, seed student, cues ...
@@ -34,17 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=1400)
     parser.add_argument("--misconception", choices=MISCONCEPTIONS, action="append")
     parser.add_argument("--raw-dir", type=Path, default=ROOT / "data" / "raw")
-    parser.add_argument(
-        "--snapshots",
-        type=Path,
-        default=ROOT / "data" / "interim" / "replay" / "2021" / "snapshots.parquet",
-    )
     parser.add_argument("--out-dir", type=Path, default=ROOT / "data" / "interim" / "synthetic")
     args = parser.parse_args(argv)
 
     warnings.simplefilter("ignore")
     summary = generate(
-        args.raw_dir, args.snapshots, args.out_dir, args.per_class, args.seed,
+        args.raw_dir, args.out_dir, args.per_class, args.seed,
         misconceptions=tuple(args.misconception or MISCONCEPTIONS),
     )  # fmt: skip
     (args.out_dir / "summary.json").write_text(json.dumps(summary, indent=2, default=dict) + "\n")

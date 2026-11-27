@@ -148,4 +148,6 @@ at or above 50.
 - **#10:** stratified verification sample from `episodes.parquet` (by class, cohort and rule),
   plus a random unflagged sample.
 - **#74:** student-grouped folds. Check that each above-gate class has candidates in every fold.
-- **#9 / #75:** synthetic windows for the four below-gate classes, training folds only.
+- **#9 / #75:** synthetic windows were generated for the four below-gate classes, but all
+  batches failed the real-vs-synthetic check and are not used (`docs/synthetic_validation.md`).
+  The four classes stay exploratory with real data only.
