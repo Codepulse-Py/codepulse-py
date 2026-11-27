@@ -35,14 +35,27 @@ from pathlib import Path
 import pandas as pd
 
 from detectors import analyse
+from features.run_outcomes import load_run_outcomes
 from mining.episodes import mine_session
 from replay.progsnap import iter_sessions, load_main_table, replay_session
 from synthetic.inject import GROUNDED, MISCONCEPTIONS, Injection, inject
 from synthetic.trace import COLUMNS, Timing, Trace
 
 LEAD_IN_MS = 45_000
+# The exception a run would raise once the misconception is in the code. Only
+# `self` confusion fails at run time; the other three run without an error,
+# which is exactly why they are hard to notice (syntax errors are automatic).
+RUN_ERRORS = {
+    "self_confusion": lambda text: (
+        "TypeError" if analyse(text, only=["self_confusion"]).findings else ""
+    ),
+}
+ERROR_TEXT = {
+    "TypeError": "missing 1 required positional argument",
+    "SyntaxError": "invalid syntax",
+}
 WINDOW_MS = 30_000
-GENERATOR_VERSION = "inject-v1"
+GENERATOR_VERSION = "inject-v2"  # v2: run outcomes (exception types) in runs.csv
 CUES = {
     "mutable_default": ["run_repeat", "long_pause", "print_inside"],
     "aliasing": ["pause_after", "print_both", "run_repeat"],
@@ -66,6 +79,7 @@ class Item:
     injected_at_ms: int
     cues: list[str]
     rows: list[dict] = field(default_factory=list)
+    runs: list[dict] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------- real data
@@ -85,6 +99,10 @@ class RealData:
         }
         self.sessions = {(s, a): ev for s, a, ev in iter_sessions(load_main_table(path))}
         self.timing = self._timing(raw)
+        outcomes = load_run_outcomes(raw_dir / "2021", "2021")
+        self.run_outcomes = {
+            (r.subject, r.assignment, r.timestamp): r for r in outcomes.itertuples(index=False)
+        }
 
     @staticmethod
     def _timing(raw: pd.DataFrame) -> dict[str, Timing]:
@@ -196,11 +214,20 @@ def build_item(real: RealData, seed, misconception: str, number: int, rng, metho
     sid = f"SYN-{number:04d}"
 
     trace = Trace(sid, seed.assignment, seed.file, text0, start - 1, real.timing[seed.subject], rng)
+    trace.error_for = RUN_ERRORS.get(misconception)
     trace._row("File.Edit", SourceLocation="0.0", EditType="X-Checkpoint", InsertText=text0,
                **{"X-Compilable": "1"})  # fmt: skip
     for row in lead_in[COLUMNS].to_dict("records"):
         row["SubjectID"] = sid
         trace.rows.append(row)
+        if row["EventType"] == "Run.Program" and row["X-Metadata"] == "Start":
+            ts = int(row["ClientTimestamp"])
+            real_run = real.run_outcomes.get((seed.subject, seed.assignment, ts))
+            if real_run is not None:  # the real run's outcome carries over
+                exit_code = "1" if real_run.errored else ("130" if real_run.terminated else "0")
+                trace.runs.append(
+                    {"timestamp": ts, "error_type": real_run.error_type, "exit_code": exit_code}
+                )
         if row["EventType"] == "File.Edit" and row["SourceLocation"]:
             i = int(float(row["SourceLocation"]))
             trace.text = (
@@ -227,7 +254,7 @@ def build_item(real: RealData, seed, misconception: str, number: int, rng, metho
 
     return Item(
         sid, misconception, inj.rule, inj.method, inj.note, seed.subject, seed.assignment,
-        seed.file, int(seed.event_id), t_seed, injected_at, cues, trace.rows,
+        seed.file, int(seed.event_id), t_seed, injected_at, cues, trace.rows, trace.runs,
     )  # fmt: skip
 
 
@@ -319,6 +346,39 @@ def _write(items: list[Item], path: Path) -> None:
     df = pd.DataFrame(rows, columns=COLUMNS)
     df["EventID"] = range(len(df))
     df.to_csv(path, index=False)
+    _write_runs(items, path.with_name("runs.csv"))
+
+
+RUNS_COLUMNS = ["SubjectID", "AssignmentID", "File", "Action", "RunID", "NumOutputLines",
+                "Source", "OutputDestination", "Output", "ClientTimestamp"]  # fmt: skip
+
+
+def _write_runs(items: list[Item], path: Path) -> None:
+    """Run records in the 2021 runs.csv format, so run outcomes load like the real cohort."""
+    rows = []
+    for item in items:
+        for run_id, run in enumerate(item.runs, start=1):
+            base = {
+                "SubjectID": item.synthetic_id,
+                "AssignmentID": item.seed_assignment,
+                "File": "",
+                "Action": "o",
+                "RunID": run_id,
+                "NumOutputLines": "",
+                "Source": "",
+                "ClientTimestamp": run["timestamp"],
+            }
+            rows.append(base | {"File": item.seed_file, "Action": "r", "Source": "PythonRunner"})
+            error = run["error_type"]
+            if error:
+                detail = ERROR_TEXT.get(error, "")
+                rows.append(base | {"OutputDestination": "stderr", "Output": "Traceback:\n"})
+                rows.append(
+                    base | {"OutputDestination": "stderr", "Output": f"{error}: {detail}\n"}
+                )
+            exit_line = f"\nProcess finished with exit code {run['exit_code']}\n"
+            rows.append(base | {"OutputDestination": "system", "Output": exit_line})
+    pd.DataFrame(rows, columns=RUNS_COLUMNS).to_csv(path, index=False)
 
 
 def usable_for_training(manifest: pd.DataFrame, test_subjects) -> pd.DataFrame:

@@ -4,7 +4,8 @@ A ``Trace`` holds the current text of one file and appends the rows an editor
 session would log: each typed character is a ``File.Edit`` Insert followed by
 an ``X-Keystroke`` row (as in the 2021 PyPhanon logs), deletions are
 ``Backspace`` actions, longer selections are one Delete, and a run is a
-``Run.Program`` Start row followed by its exit-code row. Timing is drawn from
+``Run.Program`` Start row followed by its exit-code row, with the exception
+the code would raise recorded for a 2021-format ``runs.csv``. Timing is drawn from
 the seed student's own inter-keystroke gaps and long pauses, so the trace
 types at that student's speed.
 """
@@ -12,6 +13,7 @@ types at that student's speed.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from replay.progsnap import parses
@@ -50,6 +52,10 @@ class Trace:
     timing: Timing
     rng: random.Random
     rows: list[dict] = field(default_factory=list)
+    # One entry per run: {"timestamp", "error_type", "exit_code"}; written as runs.csv.
+    runs: list[dict] = field(default_factory=list)
+    # The exception a run of ``text`` would raise ("" for none); syntax errors are automatic.
+    error_for: Callable[[str], str] | None = None
 
     def _row(self, event_type: str, **values) -> None:
         row = dict.fromkeys(COLUMNS, "")
@@ -113,8 +119,15 @@ class Trace:
         self._row("X-Action", **{"X-Metadata": "Move Cursor"})
 
     def run(self) -> None:
+        """A run: Start row, then the exit-code row; the outcome is also kept for runs.csv."""
         self.wait(self.rng.randint(300, 1200))
+        start = self.t
         self._row("Run.Program", **{"X-Metadata": "Start"})
+        if not parses(self.text):
+            error = "SyntaxError"
+        else:
+            error = self.error_for(self.text) if self.error_for else ""
+        exit_code = "1" if error else "0"
+        self.runs.append({"timestamp": start, "error_type": error, "exit_code": exit_code})
         self.wait(self.rng.randint(800, 3000))
-        exit_code = "0" if parses(self.text) else "1"
         self._row("Run.Program", **{"X-Metadata": exit_code})
