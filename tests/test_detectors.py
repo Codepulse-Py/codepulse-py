@@ -581,6 +581,8 @@ DIVISION_NEGATIVE = [
     "step = values[0] / 2.0\n",
     "for i in range(10):\n    turtle.forward(size / 2)\n",
     "y = items[i] / 2\n",
+    # half-typed `(1/6) * (...)`: an empty tuple is not a repetition target
+    "upper = (1 / 6) * ()\n",
 ]
 
 
