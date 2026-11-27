@@ -1,0 +1,218 @@
+{
+  "cohort": "2021",
+  "unit": "SubjectID",
+  "k": 5,
+  "seed": 1400,
+  "stratified_by": [
+    "FinalScore tertile (students.csv); missing score is its own tier",
+    "persistent candidate episodes per misconception (data/interim/rq1, #8)"
+  ],
+  "rounds": "test fold k; tune fold (k + 1) mod K; train = the other K - 2 folds",
+  "strata": {
+    "high": {
+      "final_score_range": [
+        95.73,
+        100.6
+      ],
+      "per_fold": [
+        2,
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    "low": {
+      "final_score_range": [
+        14.72,
+        90.15
+      ],
+      "per_fold": [
+        3,
+        2,
+        3,
+        4,
+        2
+      ]
+    },
+    "mid": {
+      "final_score_range": [
+        90.79,
+        95.68
+      ],
+      "per_fold": [
+        3,
+        3,
+        3,
+        2,
+        2
+      ]
+    },
+    "no_final_score": {
+      "per_fold": [
+        1,
+        1,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "candidates_per_fold": {
+    "global_local": {
+      "episodes": [
+        10,
+        12,
+        7,
+        9,
+        7
+      ],
+      "students": [
+        2,
+        4,
+        5,
+        3,
+        3
+      ]
+    },
+    "identity_literal": {
+      "episodes": [
+        1,
+        2,
+        1,
+        0,
+        0
+      ],
+      "students": [
+        1,
+        1,
+        1,
+        0,
+        0
+      ]
+    },
+    "indentation_scope": {
+      "episodes": [
+        38,
+        20,
+        33,
+        28,
+        28
+      ],
+      "students": [
+        6,
+        7,
+        7,
+        7,
+        8
+      ]
+    },
+    "int_division": {
+      "episodes": [
+        7,
+        9,
+        8,
+        9,
+        10
+      ],
+      "students": [
+        5,
+        5,
+        4,
+        4,
+        5
+      ]
+    },
+    "self_confusion": {
+      "episodes": [
+        5,
+        5,
+        7,
+        6,
+        6
+      ],
+      "students": [
+        2,
+        2,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "sizes": [
+    9,
+    9,
+    9,
+    9,
+    8
+  ],
+  "folds": [
+    [
+      "Student8",
+      "Student9",
+      "Student13",
+      "Student15",
+      "Student18",
+      "Student26",
+      "Student31",
+      "Student35",
+      "Student44"
+    ],
+    [
+      "Student4",
+      "Student6",
+      "Student10",
+      "Student19",
+      "Student21",
+      "Student22",
+      "Student28",
+      "Student30",
+      "Student33"
+    ],
+    [
+      "Student1",
+      "Student17",
+      "Student20",
+      "Student23",
+      "Student24",
+      "Student25",
+      "Student36",
+      "Student38",
+      "Student40"
+    ],
+    [
+      "Student2",
+      "Student3",
+      "Student5",
+      "Student11",
+      "Student12",
+      "Student27",
+      "Student32",
+      "Student34",
+      "Student42"
+    ],
+    [
+      "Student7",
+      "Student14",
+      "Student16",
+      "Student29",
+      "Student37",
+      "Student39",
+      "Student41",
+      "Student43"
+    ]
+  ],
+  "held_out_cohorts": {
+    "2019": "all students; cross-cohort test only (Stage C)"
+  },
+  "source": {
+    "students.csv": {
+      "sha256": "b10c980824b179586fc5543dff2149a495cf9a1c03f5ce7c7ecc9aa87cee6a39"
+    },
+    "candidate counts": {
+      "sha256": "bc5de5d4e29c092bb2e3b61a34f65dd45be8369e78e33582f91a75e4844e2acb",
+      "from": "data/interim/rq1/2021/episodes.parquet"
+    }
+  }
+}
